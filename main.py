@@ -1,10 +1,9 @@
+import os
 import numpy as np
 from scipy.stats import entropy
+from collections import namedtuple
 
-import config
 from utils import *
-
-CANDIDATES_SET = init_candidates()
 
 
 class Teacher:
@@ -19,14 +18,9 @@ class Teacher:
 		else:
 			return False, (nA, nB)
 
-data = np.load('BullsCows_{:d}_{:d}.npy'.format(config.DIGITS, config.N)).item()
-CANDIDATES_SET = data['candidates']
-candidates_ID = data['candidates_ID']
-compare_matrix = data['compare_matrix']
-
 class Student:
 	def __init__(self):
-		self.candidates = CANDIDATES_SET
+		self.candidates = init_candidates_set
 		self.impossible = []
 
 		# For rule based
@@ -42,7 +36,7 @@ class Student:
 		return guess
 
 	def method_entropy(self, lucky=True):
-		if len(self.candidates) <= 2 or len(self.candidates) == len(CANDIDATES_SET):
+		if len(self.candidates) <= 2 or len(self.candidates) == len(init_candidates_set):
 			return self.method_random()
 
 		ID_2 = [ self.candidates_ID[c] for c in self.candidates]
@@ -161,22 +155,69 @@ if __name__ == '__main__':
 	verbose = True
 	verbose = False
 
-	for _ in range(100000):
+	config.DIGITS = 2
+	config.CHARACTERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+	config.N = 10
+	config.check()
+
+	if not os.path.exists('BullsCows_{:d}_{:d}.npy'.format(config.DIGITS, config.N)):
+		candidates_set = init_candidates()
+		n_candidates = len(candidates_set)
+		compare_matrix = np.zeros([n_candidates, n_candidates], dtype=int)
+		candidates_ID = {}
+		for i in range(n_candidates):
+			candidates_ID[candidates_set[i]] = i
+			for j in range(n_candidates):
+				nA, nB = compare(candidates_set[i], candidates_set[j])
+				compare_matrix[i][j] = 10*nA + nB
+
+		data = {
+			'candidates': candidates_set,
+			'candidates_ID': candidates_ID,
+			'compare_matrix': compare_matrix,
+		}
+		init_candidates_set = candidates_set
+		np.save('BullsCows_{:d}_{:d}.npy'.format(config.DIGITS, config.N), data)
+	else:
+		data = np.load('BullsCows_{:d}_{:d}.npy'.format(config.DIGITS, config.N), allow_pickle=True).item()
+		init_candidates_set = data['candidates']
+		candidates_ID = data['candidates_ID']
+		compare_matrix = data['compare_matrix']
+		n_candidates = len(init_candidates_set)
+
+	n_game = 10000
+	data = []
+	for _ in range(n_game):
 		print(_, end='\r')
 		teacher = Teacher()
 		student = Student()
 		n_steps = 0
+		next_state = np.zeros(n_candidates)
 		while True:
+			state = next_state
+			for c in student.candidates:
+				state[candidates_ID[c]] = 1
 			n_steps += 1
 			guess = student.method_random()
+			action = np.zeros(n_candidates)
+			action[candidates_ID[guess]] = 1
 			#guess = student.method_entropy(True)
 			#guess = student.method_rule_for_2()
 			answer, clue = teacher.check(guess)
+			nA, nB = clue
+			student.update(guess, clue)
+			next_state = np.zeros(n_candidates)
+			for c in student.candidates:
+				next_state[candidates_ID[c]] = 1
+			reward = (2*nA + nB) / (2 * config.DIGITS)
+			data.append(Transition(state, action, next_state, reward))
 			if verbose:
 				print(guess, AB2str(clue[0], clue[1]))
 			if answer:
 				break
-			student.update(guess, clue)
+			
+		
+
 		if verbose:
 			print()
 		history.append(n_steps)
@@ -185,4 +226,3 @@ if __name__ == '__main__':
 	values, counts = np.unique(history, return_counts=True)
 	H = dict(zip(values, counts))
 	print(H)
-

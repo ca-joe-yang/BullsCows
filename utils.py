@@ -1,5 +1,26 @@
-import config
+import os
 import numpy as np
+from collections import namedtuple
+
+
+class Config:
+
+	def __init__(self):
+		## Default
+		self.DIGITS = 4
+		self.CHARACTERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+		self.N = 10
+
+	def check(self):
+		assert self.DIGITS <= self.N <= len(self.CHARACTERS)
+
+config = Config()
+config.check()
+
+
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'next_state', 'reward'))
+
 
 def init_candidates(digits=None):
 	if digits is None:
@@ -68,6 +89,8 @@ def int2str(x, digits=None):
 			return '{:03d}'.format(x)
 	elif digits == 2:
 			return '{:02d}'.format(x)
+	elif digits == 1:
+			return '{:01d}'.format(x)
 	else:
 		raise NotImplementedError("DIGITS Not implemented!")
 
